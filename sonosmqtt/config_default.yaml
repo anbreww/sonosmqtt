@@ -1,0 +1,10 @@
+# MQTT settings
+mqtt:  # You can test this utility with the free MQTT broker provided by Eclipse  
+  host: iot.eclipse.org  
+  port: 1883  
+  topic: home/sonos  
+  username: ""  
+  password: ""
+
+sonos:
+  hosts: ""
