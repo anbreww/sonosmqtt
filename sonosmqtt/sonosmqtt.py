@@ -1,5 +1,6 @@
 import yaml
 import soco
+import json
 import paho.mqtt.client as mqtt
 
 import os
@@ -47,24 +48,36 @@ if __name__ == '__main__':
 
     MQ = MQTT_Client(settings.get('mqtt'))
     sonos_devs = dict()
+    device_lookup = dict()
     for dev in devices:
         ct = dev.get_current_track_info()
-        sonos_devs[dev] = ct.get('uri', None)
+        state = dev.get_current_transport_info().get('current_transport_state')
+        sonos_devs[dev] = (ct.get('uri', None), "UNDEFINED")
+        device_lookup(dev.player_name.lower()) = dev
 
     print("initial dictionary: ", sonos_devs)
 
 
     while True:
         # get current playing tracks from sonos
-        for dev, last_track_uri in sonos_devs.items():
+        for dev, (last_track_uri, last_state) in sonos_devs.items():
             ct = dev.get_current_track_info()
-            if ct.get('uri', None) != last_track_uri:
+            tp = dev.get_current_transport_info()
+            curr_state = tp.get('current_transport_state')
+            curr_uri = ct.get('uri', None)
+
+            if curr_uri != last_track_uri or curr_state != last_state:
                 #print("{} : {} - {} ({})".format(dev.player_name, ct.get('artist'), 
                     #ct.get('title'), ct.get('duration')))
-                sonos_devs[dev] = ct.get('uri', None)
+                sonos_devs[dev] = (curr_uri, curr_state)
+                play_info = {
+                    'artist':ct.get('artist'),
+                    'title':ct.get('title'),
+                    'duration':ct.get('duration'),
+                    'status':curr_state,
+                    }
                 MQ.publish(dev.player_name.lower() + "/now_playing",
-                "{} - {} ({})".format(ct.get('artist'), ct.get('title'),
-                    ct.get('duration')))
+                        json.dumps(play_info))
 
         # push to mqtt
         MQ.loop()
