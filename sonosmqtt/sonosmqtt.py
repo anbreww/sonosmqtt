@@ -5,9 +5,6 @@ import paho.mqtt.client as mqtt
 
 import os
 
-settings = yaml.load(file(os.path.join('sonosmqtt', 'config_default.yaml'), 'r'))
-settings.update(yaml.load(file(os.path.join('sonosmqtt', 'config_user.yaml'), 'r')))
-
 class MQTT_Client(object):
     def __init__(self, mqtt_settings, callbacks=None):
         self.server = mqtt_settings.get('host')
@@ -46,8 +43,6 @@ class MQTT_Client(object):
     def loop(self):
         self.client.loop(timeout=0.5)
 
-print settings
-devices = soco.discover()
 
 class SonosManager(object):
     def __init__(self, devices):
@@ -66,17 +61,23 @@ class SonosManager(object):
                 device.stop()
             elif 'play' in payload:
                 device.play()
+            elif 'next' in payload or 'skip' in payload:
+                device.next()
+            elif 'previous' in payload:
+                device.previous()
 
 
 if __name__ == '__main__':
+    settings = yaml.load(file(os.path.join('sonosmqtt', 'config_default.yaml'), 'r'))
+    settings.update(yaml.load(file(os.path.join('sonosmqtt', 'config_user.yaml'), 'r')))
+
+    devices = soco.discover()
 
     sonos_devs = dict()
     for dev in devices:
         ct = dev.get_current_track_info()
         state = dev.get_current_transport_info().get('current_transport_state')
         sonos_devs[dev] = (ct.get('uri', None), "UNDEFINED")
-
-    print("initial dictionary: ", sonos_devs)
 
     Sonos = SonosManager(devices)
     callbacks = {'control':Sonos.control_callback}
