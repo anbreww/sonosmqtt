@@ -9,7 +9,7 @@ settings = yaml.load(file(os.path.join('sonosmqtt', 'config_default.yaml'), 'r')
 settings.update(yaml.load(file(os.path.join('sonosmqtt', 'config_user.yaml'), 'r')))
 
 class MQTT_Client(object):
-    def __init__(self, mqtt_settings):
+    def __init__(self, mqtt_settings, callbacks=None):
         self.server = mqtt_settings.get('host')
         self.port = mqtt_settings.get('port')
         self.user = mqtt_settings.get('username', None)
@@ -20,6 +20,7 @@ class MQTT_Client(object):
         self.client = mqtt.Client()
         self.client.on_connect = self.on_connect
         self.client.on_message = self.on_message
+        self.callbacks = callbacks
 
         if self.user:
             self.client.username_pw_set(self.user, self.password)
@@ -33,6 +34,10 @@ class MQTT_Client(object):
 
     def on_message(self, client, userdata, msg):
         print (msg.topic+" | "+str(msg.payload))
+        if self.callbacks:
+            for keyword, callback_func in self.callbacks.items():
+                if keyword in msg.topic:
+                    callback_func(msg.topic, msg.payload)
 
     def publish(self, topic, message):
         topic = "/".join((self.pub_topic, topic))
@@ -44,18 +49,38 @@ class MQTT_Client(object):
 print settings
 devices = soco.discover()
 
+class SonosManager(object):
+    def __init__(self, devices):
+        self.devices = devices
+        self.device_lookup = dict()
+        for dev in devices:
+            self.device_lookup[dev.player_name.lower()] = dev
+
+    def control_callback(self, topic, payload):
+        playername = topic.rstrip('/control').split('/')[-1]
+        device = self.device_lookup.get(playername, None)
+        if device:
+            if 'pause' in payload:
+                device.pause()
+            elif 'stop' in payload:
+                device.stop()
+            elif 'play' in payload:
+                device.play()
+
+
 if __name__ == '__main__':
 
-    MQ = MQTT_Client(settings.get('mqtt'))
     sonos_devs = dict()
-    device_lookup = dict()
     for dev in devices:
         ct = dev.get_current_track_info()
         state = dev.get_current_transport_info().get('current_transport_state')
         sonos_devs[dev] = (ct.get('uri', None), "UNDEFINED")
-        device_lookup(dev.player_name.lower()) = dev
 
     print("initial dictionary: ", sonos_devs)
+
+    Sonos = SonosManager(devices)
+    callbacks = {'control':Sonos.control_callback}
+    MQ = MQTT_Client(settings.get('mqtt'), callbacks)
 
 
     while True:
